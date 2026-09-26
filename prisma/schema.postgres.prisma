@@ -1,0 +1,514 @@
+// CareerForgeX PostgreSQL Schema for Supabase / Neon / AWS RDS Deployment
+// To use this in production:
+// 1. Set DATABASE_URL to your postgres connection string
+// 2. Run: npx prisma migrate deploy --schema=prisma/schema.postgres.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id             String     @id @default(cuid())
+  email          String     @unique
+  passwordHash   String?    @map("password_hash")
+  name           String
+  role           String     @default("admin") // admin, staff, viewer, student
+  organizationId String?    @default("org_default") @map("organization_id")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  assignedLeads      Lead[]                @relation("LeadAssignee")
+  auditLogs          AuditLog[]
+  savedOpportunities SavedOpportunity[]
+  alertPreference    UserAlertPreference?
+  notifications      Notification[]
+
+  @@map("users")
+}
+
+// ==========================================
+// AUTONOMOUS OPPORTUNITY AUTOPILOT ENGINE
+// ==========================================
+
+model Source {
+  id                  String    @id @default(cuid())
+  name                String
+  slug                String    @unique
+  url                 String
+  sourceType          String    @map("source_type") // iit, nit, iisc, iiser, university, government, corporate, scholarship, research_lab, other
+  tier                Int       @default(1) // 1=Official, 2=Recognized Institution, 3=Secondary, 4=Unverified
+  adapterType         String    @default("html") @map("adapter_type")
+  adapterVersion      String    @default("1.0.0") @map("adapter_version")
+  parserVersion       String    @default("1.0.0") @map("parser_version")
+  checkFrequency      Int       @default(360) @map("check_frequency") // minutes
+  priority            Int       @default(1)
+  status              String    @default("ACTIVE") // ACTIVE, PAUSED, DEGRADED, BLOCKED, REVIEW
+  trustStatus         String    @default("TRUSTED") @map("trust_status")
+  lastCheckedAt       DateTime? @map("last_checked_at")
+  nextCheckAt         DateTime? @map("next_check_at")
+  lastSuccessAt       DateTime? @map("last_success_at")
+  lastErrorAt         DateTime? @map("last_error_at")
+  lastErrorMessage    String?   @map("last_error_message")
+  failureCount        Int       @default(0) @map("failure_count")
+  consecutiveFailures Int       @default(0) @map("consecutive_failures")
+  etag                String?
+  lastModified        String?   @map("last_modified")
+  contentHash         String?   @map("content_hash")
+  headersJson         String?   @map("headers_json")
+  configJson          String?   @map("config_json")
+  recordsFound        Int       @default(0) @map("records_found")
+  recordsCreated      Int       @default(0) @map("records_created")
+  recordsUpdated      Int       @default(0) @map("records_updated")
+  isAutonomous        Boolean   @default(true) @map("is_autonomous")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  opportunities       Opportunity[]
+  ingestionJobs       IngestionJob[]
+  discoveredSources   DiscoveredSource[]
+
+  @@map("sources")
+}
+
+model Opportunity {
+  id                  String    @id @default(cuid())
+  title               String
+  slug                String    @unique
+  organization        String
+  opportunityType     String    @map("opportunity_type")
+  category            String?
+  shortSummary        String    @map("short_summary")
+  fullDescription     String    @map("full_description")
+  eligibility         String?
+  degreeRequirements  String?   @map("degree_requirements")
+  yearRequirements    String?   @map("year_requirements")
+  branchRequirements  String?   @map("branch_requirements")
+  domain              String
+  skills              String?
+  location            String?
+  mode                String    @default("On-site")
+  duration            String?
+  stipend             String?
+  salary              String?
+  isPaid              Boolean   @default(false) @map("is_paid")
+  startDate           DateTime? @map("start_date")
+  endDate             DateTime? @map("end_date")
+  deadline            DateTime?
+  deadlineStatus      String    @default("OPEN") @map("deadline_status")
+  daysRemaining       Int?      @map("days_remaining")
+  applicationProcess  String?   @map("application_process")
+  applicationUrl      String    @map("application_url")
+  sourceUrl           String    @map("source_url")
+  originalSourceUrl   String?   @map("original_source_url")
+  sourcePublishedDate DateTime? @map("source_published_date")
+  contactInformation  String?   @map("contact_information")
+  importantNotes      String?   @map("important_notes")
+  canonicalUrl        String?   @map("canonical_url")
+  externalId          String?   @map("external_id")
+  contentHash         String?   @map("content_hash")
+  confidenceScore     Int       @default(85) @map("confidence_score")
+  confidenceBreakdown String?   @map("confidence_breakdown")
+  status              String    @default("PUBLISHED") // PUBLISHED, PENDING_REVIEW, ARCHIVED, REJECTED, SOURCE_NOT_FOUND
+  isVerified          Boolean   @default(true) @map("is_verified")
+  isFeatured          Boolean   @default(false) @map("is_featured")
+  viewCount           Int       @default(0) @map("view_count")
+  saveCount           Int       @default(0) @map("save_count")
+  sourceId            String?   @map("source_id")
+  source              Source?   @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  revalidationCount   Int       @default(0) @map("revalidation_count")
+  lastRevalidatedAt   DateTime? @map("last_revalidated_at")
+  revalidationStatus  String    @default("OK") @map("revalidation_status")
+  consecutive404s     Int       @default(0) @map("consecutive_404s")
+  version             Int       @default(1)
+  actorType           String    @default("SYSTEM") @map("actor_type")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  changeLogs          OpportunityChangeLog[]
+  savedBy             SavedOpportunity[]
+  reviewItems         ReviewQueueItem[]
+  notifications       Notification[]
+
+  @@map("opportunities")
+}
+
+model OpportunityChangeLog {
+  id            String      @id @default(cuid())
+  opportunityId String      @map("opportunity_id")
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  fieldName     String      @map("field_name")
+  oldValue      String?     @map("old_value")
+  newValue      String?     @map("new_value")
+  reason        String?
+  actorType     String      @default("SYSTEM") @map("actor_type")
+  actorId       String?     @map("actor_id")
+  source        String?
+  changedAt     DateTime    @default(now()) @map("changed_at")
+
+  @@map("opportunity_change_logs")
+}
+
+model ReviewQueueItem {
+  id             String       @id @default(cuid())
+  opportunityId  String?      @map("opportunity_id")
+  opportunity    Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  sourceId       String?      @map("source_id")
+  rawPayload     String?      @map("raw_payload")
+  extractedData  String?      @map("extracted_data")
+  reviewReason   String       @map("review_reason")
+  duplicateOfId  String?      @map("duplicate_of_id")
+  status         String       @default("PENDING")
+  reviewedBy     String?      @map("reviewed_by")
+  reviewedAt     DateTime?    @map("reviewed_at")
+  reviewNotes    String?      @map("review_notes")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@map("review_queue_items")
+}
+
+model DiscoveredSource {
+  id                       String   @id @default(cuid())
+  url                      String   @unique
+  name                     String?
+  discoveredVia            String   @map("discovered_via")
+  referringUrl             String?  @map("referring_url")
+  domain                   String
+  institutionType          String?  @map("institution_type")
+  trustTier                Int      @default(3) @map("trust_tier")
+  status                   String   @default("DISCOVERED")
+  validationNotes          String?  @map("validation_notes")
+  testedAdapter            String?  @map("tested_adapter")
+  sampleOpportunitiesCount Int      @default(0) @map("sample_opportunities_count")
+  sourceId                 String?  @map("source_id")
+  source                   Source?  @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
+
+  @@map("discovered_sources")
+}
+
+model IngestionJob {
+  id              String    @id @default(cuid())
+  runId           String    @map("run_id")
+  jobType         String    @map("job_type")
+  sourceId        String?   @map("source_id")
+  source          Source?   @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  status          String    @default("QUEUED")
+  startedAt       DateTime? @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+  durationMs      Int?      @map("duration_ms")
+  itemsScanned    Int       @default(0) @map("items_scanned")
+  itemsCreated    Int       @default(0) @map("items_created")
+  itemsUpdated    Int       @default(0) @map("items_updated")
+  itemsDuplicated Int       @default(0) @map("items_duplicated")
+  errorMessage    String?   @map("error_message")
+  retryCount      Int       @default(0) @map("retry_count")
+  maxRetries      Int       @default(3) @map("max_retries")
+  executionLogs   String?   @map("execution_logs")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("ingestion_jobs")
+}
+
+model SystemMetric {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_metrics")
+}
+
+model SystemAlert {
+  id         String    @id @default(cuid())
+  severity   String    @default("WARNING")
+  title      String
+  message    String
+  sourceId   String?   @map("source_id")
+  isResolved Boolean   @default(false) @map("is_resolved")
+  resolvedAt DateTime? @map("resolved_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@map("system_alerts")
+}
+
+model SavedOpportunity {
+  id            String      @id @default(cuid())
+  userId        String      @map("user_id")
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunityId String      @map("opportunity_id")
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  notes         String?
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  @@unique([userId, opportunityId])
+  @@map("saved_opportunities")
+}
+
+model UserAlertPreference {
+  id               String   @id @default(cuid())
+  userId           String   @unique @map("user_id")
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunityTypes String?  @map("opportunity_types")
+  domains          String?
+  keywords         String?
+  locations        String?
+  degreeLevel      String?  @map("degree_level")
+  minStipend       Int?     @map("min_stipend")
+  emailAlerts      Boolean  @default(true) @map("email_alerts")
+  inAppAlerts      Boolean  @default(true) @map("in_app_alerts")
+  frequency        String   @default("DAILY")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("user_alert_preferences")
+}
+
+model Notification {
+  id            String       @id @default(cuid())
+  userId        String?      @map("user_id")
+  user          User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunityId String?      @map("opportunity_id")
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  title         String
+  message       String
+  channel       String       @default("IN_APP")
+  isRead        Boolean      @default(false) @map("is_read")
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  @@map("notifications")
+}
+
+// Pre-existing models kept for compatibility
+model Lead {
+  id             String    @id @default(cuid())
+  name           String
+  email          String
+  company        String
+  website        String?
+  industry       String?
+  companySize    String?   @map("company_size")
+  automationGoal String    @map("automation_goal")
+  currentTools   String?   @map("current_tools")
+  budgetRange    String?   @map("budget_range")
+  timeline       String?
+  notes          String?
+  source         String    @default("website_audit_form")
+  status         String    @default("New")
+  score          Int?      @default(50)
+  aiSummary      String?   @map("ai_summary")
+  fitScore       String?   @map("fit_score")
+  isDemo         Boolean   @default(false) @map("is_demo")
+  assignedToId   String?   @map("assigned_to_id")
+  assignedTo     User?     @relation("LeadAssignee", fields: [assignedToId], references: [id])
+  organizationId String    @default("org_default") @map("organization_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  bookings       Booking[]
+  projects       AutomationProject[]
+
+  @@map("leads")
+}
+
+model Booking {
+  id             String   @id @default(cuid())
+  leadId         String?  @map("lead_id")
+  lead           Lead?    @relation(fields: [leadId], references: [id])
+  name           String
+  email          String
+  company        String
+  date           String
+  time           String
+  timezone       String   @default("UTC")
+  status         String   @default("Requested")
+  meetingLink    String?  @map("meeting_link")
+  notes          String?
+  organizationId String   @default("org_default") @map("organization_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("bookings")
+}
+
+model ContactSubmission {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  company   String?
+  message   String
+  metadata  String?
+  ipHash    String?  @map("ip_hash")
+  isSpam    Boolean  @default(false) @map("is_spam")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("contact_submissions")
+}
+
+model AutomationProject {
+  id             String              @id @default(cuid())
+  leadId         String?             @map("lead_id")
+  lead           Lead?               @relation(fields: [leadId], references: [id])
+  name           String
+  description    String?
+  status         String              @default("Discovery")
+  projectType    String              @map("project_type")
+  startDate      DateTime?           @map("start_date")
+  targetDate     DateTime?           @map("target_date")
+  progress       Int                 @default(10)
+  organizationId String              @default("org_default") @map("organization_id")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  milestones     ProjectMilestone[]
+  executions     AutomationExecution[]
+
+  @@map("automation_projects")
+}
+
+model ProjectMilestone {
+  id          String            @id @default(cuid())
+  projectId   String            @map("project_id")
+  project     AutomationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  status      String            @default("Pending")
+  dueDate     DateTime?         @map("due_date")
+  order       Int               @default(0)
+
+  @@map("project_milestones")
+}
+
+model AutomationExecution {
+  id                    String             @id @default(cuid())
+  workflowId            String?            @map("workflow_id")
+  projectId             String?            @map("project_id")
+  project               AutomationProject? @relation(fields: [projectId], references: [id])
+  workflowName          String             @default("Inbound Lead Processing Agent") @map("workflow_name")
+  triggerEvent          String             @default("manual") @map("trigger_event")
+  status                String             @default("completed")
+  stepsJson             String             @map("steps_json")
+  durationMs            Int                @default(1200) @map("duration_ms")
+  errorMessage          String?            @map("error_message")
+  toolCallsJson         String?            @map("tool_calls_json")
+  humanApprovalRequired Boolean            @default(false) @map("human_approval_required")
+  approvalPayloadJson   String?            @map("approval_payload_json")
+  approvedBy            String?            @map("approved_by")
+  modelUsed             String             @default("gpt-4o") @map("model_used")
+  createdAt             DateTime           @default(now()) @map("created_at")
+  updatedAt             DateTime           @updatedAt @map("updated_at")
+
+  @@map("automation_executions")
+}
+
+model WorkflowTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  category    String
+  description String
+  nodesJson   String   @map("nodes_json")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("workflow_templates")
+}
+
+model DemoRun {
+  id            String   @id @default(cuid())
+  demoType      String   @map("demo_type")
+  sessionId     String?  @map("session_id")
+  inputHash     String?  @map("input_hash")
+  inputPayload  String?  @map("input_payload")
+  resultSummary String?  @map("result_summary")
+  resultPayload String?  @map("result_payload")
+  mode          String   @default("demo")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("demo_runs")
+}
+
+model CaseStudy {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  industry    String
+  summary     String
+  problem     String
+  solution    String
+  workflow    String
+  tools       String
+  results     String
+  isExample   Boolean  @default(true) @map("is_example")
+  published   Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("case_studies")
+}
+
+model BlogPost {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  title       String
+  excerpt     String
+  content     String
+  category    String
+  author      String    @default("CareerForgeX Team")
+  readingTime String    @default("5 min read") @map("reading_time")
+  coverImage  String?   @map("cover_image")
+  published   Boolean   @default(false)
+  publishedAt DateTime? @map("published_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("blog_posts")
+}
+
+model FAQItem {
+  id        String   @id @default(cuid())
+  question  String
+  answer    String
+  category  String   @default("General")
+  order     Int      @default(0)
+  published Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("faq_items")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?  @map("user_id")
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id")
+  metadata   String?
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("audit_logs")
+}
+
+model IntegrationConfig {
+  id              String   @id @default(cuid())
+  name            String
+  provider        String
+  status          String   @default("configured")
+  configReference String?  @map("config_reference")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("integrations")
+}

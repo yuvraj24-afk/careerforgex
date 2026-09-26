@@ -1,0 +1,511 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id             String     @id @default(cuid())
+  email          String     @unique
+  passwordHash   String?
+  name           String
+  role           String     @default("admin") // admin, staff, viewer, student
+  organizationId String?    @default("org_default")
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  assignedLeads      Lead[]                @relation("LeadAssignee")
+  auditLogs          AuditLog[]
+  savedOpportunities SavedOpportunity[]
+  alertPreference    UserAlertPreference?
+  notifications      Notification[]
+
+  @@map("users")
+}
+
+// ==========================================
+// AUTONOMOUS OPPORTUNITY AUTOPILOT ENGINE
+// ==========================================
+
+model Source {
+  id                  String    @id @default(cuid())
+  name                String
+  slug                String    @unique
+  url                 String
+  sourceType          String    // iit, nit, iisc, iiser, university, government, corporate, scholarship, research_lab, other
+  tier                Int       @default(1) // 1=Official, 2=Recognized Institution, 3=Secondary, 4=Unverified
+  adapterType         String    @default("html") // rss, atom, json, api, sitemap, html, pdf, playwright
+  adapterVersion      String    @default("1.0.0")
+  parserVersion       String    @default("1.0.0")
+  checkFrequency      Int       @default(360) // minutes
+  priority            Int       @default(1) // 1=High, 2=Normal, 3=Low
+  status              String    @default("ACTIVE") // ACTIVE, PAUSED, DEGRADED, BLOCKED, REVIEW
+  trustStatus         String    @default("TRUSTED") // TRUSTED, VERIFIED, PROBATION, UNTRUSTED, BLOCKED
+  lastCheckedAt       DateTime?
+  nextCheckAt         DateTime?
+  lastSuccessAt       DateTime?
+  lastErrorAt         DateTime?
+  lastErrorMessage    String?
+  failureCount        Int       @default(0)
+  consecutiveFailures Int       @default(0)
+  etag                String?
+  lastModified        String?
+  contentHash         String?
+  headersJson         String?
+  configJson          String?
+  recordsFound        Int       @default(0)
+  recordsCreated      Int       @default(0)
+  recordsUpdated      Int       @default(0)
+  isAutonomous        Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  opportunities       Opportunity[]
+  ingestionJobs       IngestionJob[]
+  discoveredSources   DiscoveredSource[]
+
+  @@map("sources")
+}
+
+model Opportunity {
+  id                  String    @id @default(cuid())
+  title               String
+  slug                String    @unique
+  organization        String
+  opportunityType     String    // Internship, Research, Job, PhD, Scholarship, Fellowship, Competition, Conference, Workshop, Higher Education, Research Project, Other
+  category            String?
+  shortSummary        String
+  fullDescription     String
+  eligibility         String?
+  degreeRequirements  String?   // JSON string: e.g. ["B.Tech", "M.Tech", "PhD"]
+  yearRequirements    String?   // JSON string: e.g. ["2nd Year", "3rd Year", "4th Year"]
+  branchRequirements  String?   // JSON string: e.g. ["CSE", "ECE", "Mechanical", "Any"]
+  domain              String    // Computer Science / AI, Electronics, Mechanical, Biotech, Sciences, Management, etc.
+  skills              String?   // JSON string: e.g. ["Python", "Machine Learning", "Research Methodology"]
+  location            String?
+  mode                String    @default("On-site") // Remote, On-site, Hybrid
+  duration            String?
+  stipend             String?
+  salary              String?
+  isPaid              Boolean   @default(false)
+  startDate           DateTime?
+  endDate             DateTime?
+  deadline            DateTime?
+  deadlineStatus      String    @default("OPEN") // OPEN, CLOSING_SOON, EXPIRED, CLOSED, NO_DEADLINE, UNKNOWN
+  daysRemaining       Int?
+  applicationProcess  String?
+  applicationUrl      String
+  sourceUrl           String
+  originalSourceUrl   String?
+  sourcePublishedDate DateTime?
+  contactInformation  String?
+  importantNotes      String?
+  canonicalUrl        String?
+  externalId          String?
+  contentHash         String?
+  confidenceScore     Int       @default(85)
+  confidenceBreakdown String?   // JSON explanation
+  status              String    @default("PUBLISHED") // PUBLISHED, PENDING_REVIEW, ARCHIVED, REJECTED, SOURCE_NOT_FOUND
+  isVerified          Boolean   @default(true)
+  isFeatured          Boolean   @default(false)
+  viewCount           Int       @default(0)
+  saveCount           Int       @default(0)
+  sourceId            String?
+  source              Source?   @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  revalidationCount   Int       @default(0)
+  lastRevalidatedAt   DateTime?
+  revalidationStatus  String    @default("OK") // OK, 404_WARNING, SOURCE_NOT_FOUND, CONFIRMED_EXPIRED
+  consecutive404s     Int       @default(0)
+  version             Int       @default(1)
+  actorType           String    @default("SYSTEM") // SYSTEM, ADMIN
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  changeLogs          OpportunityChangeLog[]
+  savedBy             SavedOpportunity[]
+  reviewItems         ReviewQueueItem[]
+  notifications       Notification[]
+
+  @@map("opportunities")
+}
+
+model OpportunityChangeLog {
+  id            String      @id @default(cuid())
+  opportunityId String
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  fieldName     String      // deadline, stipend, eligibility, applicationUrl, status, etc.
+  oldValue      String?
+  newValue      String?
+  reason        String?
+  actorType     String      @default("SYSTEM") // SYSTEM, ADMIN
+  actorId       String?
+  source        String?
+  changedAt     DateTime    @default(now())
+
+  @@map("opportunity_change_logs")
+}
+
+model ReviewQueueItem {
+  id             String       @id @default(cuid())
+  opportunityId  String?
+  opportunity    Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  sourceId       String?
+  rawPayload     String?      // JSON string of input text/card
+  extractedData  String?      // JSON string of proposed fields
+  reviewReason   String       // LOW_CONFIDENCE, LIKELY_DUPLICATE, MISSING_DEADLINE, AMBIGUOUS_EXTRACTION, MANUAL_FLAG
+  duplicateOfId  String?
+  status         String       @default("PENDING") // PENDING, APPROVED, MERGED, REJECTED, DISMISSED
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  reviewNotes    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@map("review_queue_items")
+}
+
+model DiscoveredSource {
+  id                       String   @id @default(cuid())
+  url                      String   @unique
+  name                     String?
+  discoveredVia            String   // sitemap_crawl, link_extractor, search_discovery, institutional_directory, manual
+  referringUrl             String?
+  domain                   String
+  institutionType          String?  // iit, nit, central_univ, csir_lab, foreign_univ, company, unknown
+  trustTier                Int      @default(3)
+  status                   String   @default("DISCOVERED") // DISCOVERED, VALIDATING, APPROVED, REJECTED, BLOCKED
+  validationNotes          String?
+  testedAdapter            String?
+  sampleOpportunitiesCount Int      @default(0)
+  sourceId                 String?
+  source                   Source?  @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@map("discovered_sources")
+}
+
+model IngestionJob {
+  id              String    @id @default(cuid())
+  runId           String
+  jobType         String    // check_source, fetch_source, extract_opportunity, revalidate_all, discover_sources, maintenance_cleanup
+  sourceId        String?
+  source          Source?   @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  status          String    @default("QUEUED") // QUEUED, RUNNING, COMPLETED, FAILED, RETRYING
+  startedAt       DateTime?
+  completedAt     DateTime?
+  durationMs      Int?
+  itemsScanned    Int       @default(0)
+  itemsCreated    Int       @default(0)
+  itemsUpdated    Int       @default(0)
+  itemsDuplicated Int       @default(0)
+  errorMessage    String?
+  retryCount      Int       @default(0)
+  maxRetries      Int       @default(3)
+  executionLogs   String?   // JSON lines or step log
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("ingestion_jobs")
+}
+
+model SystemMetric {
+  id        String   @id @default(cuid())
+  key       String   @unique // last_worker_heartbeat, pipeline_paused, total_runs, etc.
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("system_metrics")
+}
+
+model SystemAlert {
+  id         String    @id @default(cuid())
+  severity   String    @default("WARNING") // INFO, WARNING, CRITICAL
+  title      String
+  message    String
+  sourceId   String?
+  isResolved Boolean   @default(false)
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@map("system_alerts")
+}
+
+model SavedOpportunity {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunityId String
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  notes         String?
+  createdAt     DateTime    @default(now())
+
+  @@unique([userId, opportunityId])
+  @@map("saved_opportunities")
+}
+
+model UserAlertPreference {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunityTypes String?  // JSON array
+  domains          String?  // JSON array
+  keywords         String?
+  locations        String?
+  degreeLevel      String?
+  minStipend       Int?
+  emailAlerts      Boolean  @default(true)
+  inAppAlerts      Boolean  @default(true)
+  frequency        String   @default("DAILY")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("user_alert_preferences")
+}
+
+model Notification {
+  id            String       @id @default(cuid())
+  userId        String?
+  user          User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunityId String?
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  title         String
+  message       String
+  channel       String       @default("IN_APP")
+  isRead        Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+
+  @@map("notifications")
+}
+
+// ==========================================
+// PRE-EXISTING COMPATIBILITY MODELS
+// ==========================================
+
+model Lead {
+  id             String    @id @default(cuid())
+  name           String
+  email          String
+  company        String
+  website        String?
+  industry       String?
+  companySize    String?
+  automationGoal String
+  currentTools   String?
+  budgetRange    String?
+  timeline       String?
+  notes          String?
+  source         String    @default("website_audit_form")
+  status         String    @default("New")
+  score          Int?      @default(50)
+  aiSummary      String?
+  fitScore       String?
+  isDemo         Boolean   @default(false)
+  assignedToId   String?
+  assignedTo     User?     @relation("LeadAssignee", fields: [assignedToId], references: [id])
+  organizationId String    @default("org_default")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  bookings       Booking[]
+  projects       AutomationProject[]
+
+  @@map("leads")
+}
+
+model Booking {
+  id             String   @id @default(cuid())
+  leadId         String?
+  lead           Lead?    @relation(fields: [leadId], references: [id])
+  name           String
+  email          String
+  company        String
+  date           String
+  time           String
+  timezone       String   @default("UTC")
+  status         String   @default("Requested")
+  meetingLink    String?
+  notes          String?
+  organizationId String   @default("org_default")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("bookings")
+}
+
+model ContactSubmission {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  company   String?
+  message   String
+  metadata  String?
+  ipHash    String?
+  isSpam    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("contact_submissions")
+}
+
+model AutomationProject {
+  id             String              @id @default(cuid())
+  leadId         String?
+  lead           Lead?               @relation(fields: [leadId], references: [id])
+  name           String
+  description    String?
+  status         String              @default("Discovery")
+  projectType    String
+  startDate      DateTime?
+  targetDate     DateTime?
+  progress       Int                 @default(10)
+  organizationId String              @default("org_default")
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  milestones     ProjectMilestone[]
+  executions     AutomationExecution[]
+
+  @@map("automation_projects")
+}
+
+model ProjectMilestone {
+  id          String            @id @default(cuid())
+  projectId   String
+  project     AutomationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  status      String            @default("Pending")
+  dueDate     DateTime?
+  order       Int               @default(0)
+
+  @@map("project_milestones")
+}
+
+model AutomationExecution {
+  id                    String             @id @default(cuid())
+  workflowId            String?
+  projectId             String?
+  project               AutomationProject? @relation(fields: [projectId], references: [id])
+  workflowName          String             @default("Inbound Lead Processing Agent")
+  triggerEvent          String             @default("manual")
+  status                String             @default("completed")
+  stepsJson             String
+  durationMs            Int                @default(1200)
+  errorMessage          String?
+  toolCallsJson         String?
+  humanApprovalRequired Boolean            @default(false)
+  approvalPayloadJson   String?
+  approvedBy            String?
+  modelUsed             String             @default("gpt-4o")
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  @@map("automation_executions")
+}
+
+model WorkflowTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  category    String
+  description String
+  nodesJson   String
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("workflow_templates")
+}
+
+model DemoRun {
+  id            String   @id @default(cuid())
+  demoType      String
+  sessionId     String?
+  inputHash     String?
+  inputPayload  String?
+  resultSummary String?
+  resultPayload String?
+  mode          String   @default("demo")
+  createdAt     DateTime @default(now())
+
+  @@map("demo_runs")
+}
+
+model CaseStudy {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  industry    String
+  summary     String
+  problem     String
+  solution    String
+  workflow    String
+  tools       String
+  results     String
+  isExample   Boolean  @default(true)
+  published   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("case_studies")
+}
+
+model BlogPost {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  title       String
+  excerpt     String
+  content     String
+  category    String
+  author      String    @default("CareerForgeX Team")
+  readingTime String    @default("5 min read")
+  coverImage  String?
+  published   Boolean   @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("blog_posts")
+}
+
+model FAQItem {
+  id        String   @id @default(cuid())
+  question  String
+  answer    String
+  category  String   @default("General")
+  order     Int      @default(0)
+  published Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("faq_items")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  entityType String
+  entityId   String?
+  metadata   String?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+model IntegrationConfig {
+  id              String   @id @default(cuid())
+  name            String
+  provider        String
+  status          String   @default("configured")
+  configReference String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("integrations")
+}
