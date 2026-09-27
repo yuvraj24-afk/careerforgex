@@ -363,11 +363,11 @@ export default async function HomePage() {
                 Browse All Openings
               </Link>
               <Link
-                href="/admin/automation"
+                href="/opportunities?type=Research"
                 className="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-medium text-sm border border-slate-700 transition-all flex items-center gap-2"
               >
-                <span>Inspect Autopilot Telemetry</span>
-                <ExternalLink className="w-4 h-4 text-slate-400" />
+                <span>Explore Research Fellowships</span>
+                <ArrowRight className="w-4 h-4 text-slate-400" />
               </Link>
             </div>
           </div>

@@ -7,8 +7,8 @@ import { Lock, Mail, Key, ArrowRight, Loader2, AlertCircle, Cpu } from "lucide-r
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("admin@careerforgex.com");
-  const [password, setPassword] = useState("admin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,7 +29,9 @@ export default function AdminLoginPage() {
         throw new Error(data.error || "Login failed");
       }
 
-      router.push("/admin");
+      const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+      const destination = params?.get("from") || "/admin/automation";
+      router.push(destination);
       router.refresh();
     } catch (err: any) {
       setError(err.message || "Invalid credentials");

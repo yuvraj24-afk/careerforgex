@@ -29,13 +29,10 @@ export function Footer() {
             </p>
 
             <div className="pt-2">
-              <Link
-                href="/admin/automation"
-                className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/80 border border-cyan-800 text-cyan-300 font-mono text-[11px] hover:border-cyan-600 transition-colors"
-              >
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/80 border border-cyan-800 text-cyan-300 font-mono text-[11px]">
                 <Activity className="w-3 h-3 text-cyan-400 animate-pulse" />
                 <span>Autopilot Pipeline: Active & Self-Updating</span>
-              </Link>
+              </div>
             </div>
           </div>
 
@@ -100,18 +97,13 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/admin/automation" className="hover:text-cyan-400 transition-colors">
-                  Autopilot Telemetry
+                <Link href="/faq" className="hover:text-cyan-400 transition-colors">
+                  Frequently Asked Questions
                 </Link>
               </li>
               <li>
-                <Link href="/admin/review" className="hover:text-cyan-400 transition-colors">
-                  Review Queue
-                </Link>
-              </li>
-              <li>
-                <Link href="/admin/sources" className="hover:text-cyan-400 transition-colors">
-                  Source Registry
+                <Link href="/how-it-works" className="hover:text-cyan-400 transition-colors">
+                  How Autopilot Works
                 </Link>
               </li>
             </ul>
@@ -135,7 +127,6 @@ export function Footer() {
             <div className="flex items-center gap-4">
               <Link href="/privacy" className="hover:text-slate-400">Privacy Policy</Link>
               <Link href="/terms" className="hover:text-slate-400">Terms of Service</Link>
-              <Link href="/admin/automation" className="hover:text-cyan-400 font-mono">Autopilot Admin</Link>
             </div>
           </div>
         </div>

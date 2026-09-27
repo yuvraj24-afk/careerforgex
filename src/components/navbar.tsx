@@ -155,12 +155,10 @@ export function Navbar() {
           {/* Right Action Buttons */}
           <div className="hidden lg:flex items-center gap-3">
             <Link
-              href="/admin/automation"
+              href="/saved"
               className="inline-flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg transition-all"
-              title="Admin Autopilot Pipeline Control"
             >
-              <Activity className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-              <span>Autopilot Status</span>
+              <span>Saved Bookmarks</span>
             </Link>
 
             <Link
@@ -174,13 +172,6 @@ export function Navbar() {
 
           {/* Mobile Menu Button */}
           <div className="lg:hidden flex items-center gap-2">
-            <Link
-              href="/admin/automation"
-              className="p-2 text-slate-300 hover:text-cyan-400"
-              title="Autopilot"
-            >
-              <Activity className="w-5 h-5 text-cyan-400" />
-            </Link>
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="p-2 text-slate-300 hover:text-white rounded-lg hover:bg-slate-900"
@@ -246,11 +237,10 @@ export function Navbar() {
               </div>
             </div>
             <Link
-              href="/admin/automation"
-              className="px-3 py-2 text-sm font-medium text-cyan-400 hover:bg-slate-900 rounded-lg flex items-center gap-2"
+              href="/saved"
+              className="px-3 py-2 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-900 rounded-lg flex items-center gap-2"
             >
-              <Activity className="w-4 h-4 text-cyan-400" />
-              Admin Autopilot Dashboard
+              Saved Bookmarks
             </Link>
           </div>
         </div>
