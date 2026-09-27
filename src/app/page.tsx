@@ -26,47 +26,62 @@ export const dynamic = "force-dynamic";
 export default async function HomePage() {
   const now = new Date();
 
-  // 1. Fetch live metrics from database
-  const [totalOpportunities, totalSources, closingSoonCount] = await Promise.all([
-    prisma.opportunity.count({ where: { status: "PUBLISHED" } }),
-    prisma.source.count({ where: { status: "ACTIVE" } }),
-    prisma.opportunity.count({
-      where: {
-        status: "PUBLISHED",
-        deadlineStatus: "CLOSING_SOON",
-      },
-    }),
-  ]);
+  // 1. Fetch live metrics & opportunities from database safely
+  let totalOpportunities = 0;
+  let totalSources = 0;
+  let closingSoonCount = 0;
+  let closingSoonOpps: any[] = [];
+  let latestOpps: any[] = [];
+  let researchOpps: any[] = [];
 
-  // 2. Fetch Closing Soon Opportunities
-  const closingSoonOpps = await prisma.opportunity.findMany({
-    where: {
-      status: "PUBLISHED",
-      deadline: { gte: now },
-    },
-    orderBy: { deadline: "asc" },
-    take: 3,
-    include: { source: true },
-  });
+  try {
+    const [oppCount, srcCount, soonCount] = await Promise.all([
+      prisma.opportunity.count({ where: { status: "PUBLISHED" } }),
+      prisma.source.count({ where: { status: "ACTIVE" } }),
+      prisma.opportunity.count({
+        where: {
+          status: "PUBLISHED",
+          deadlineStatus: "CLOSING_SOON",
+        },
+      }),
+    ]);
+    totalOpportunities = oppCount;
+    totalSources = srcCount;
+    closingSoonCount = soonCount;
 
-  // 3. Fetch Latest Verified Opportunities
-  const latestOpps = await prisma.opportunity.findMany({
-    where: { status: "PUBLISHED" },
-    orderBy: { createdAt: "desc" },
-    take: 6,
-    include: { source: true },
-  });
+    const [closing, latest, research] = await Promise.all([
+      prisma.opportunity.findMany({
+        where: {
+          status: "PUBLISHED",
+          deadline: { gte: now },
+        },
+        orderBy: { deadline: "asc" },
+        take: 3,
+        include: { source: true },
+      }),
+      prisma.opportunity.findMany({
+        where: { status: "PUBLISHED" },
+        orderBy: { createdAt: "desc" },
+        take: 6,
+        include: { source: true },
+      }),
+      prisma.opportunity.findMany({
+        where: {
+          status: "PUBLISHED",
+          OR: [{ opportunityType: "Research" }, { opportunityType: "Fellowship" }],
+        },
+        orderBy: { createdAt: "desc" },
+        take: 4,
+        include: { source: true },
+      }),
+    ]);
 
-  // 4. Fetch Research Opportunities
-  const researchOpps = await prisma.opportunity.findMany({
-    where: {
-      status: "PUBLISHED",
-      OR: [{ opportunityType: "Research" }, { opportunityType: "Fellowship" }],
-    },
-    orderBy: { createdAt: "desc" },
-    take: 4,
-    include: { source: true },
-  });
+    closingSoonOpps = closing;
+    latestOpps = latest;
+    researchOpps = research;
+  } catch (error) {
+    console.error("Database query fallback in HomePage:", error);
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 selection:bg-cyan-500 selection:text-black">

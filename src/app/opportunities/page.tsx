@@ -66,21 +66,32 @@ export default async function OpportunitiesPage({
     where.deadlineStatus = "CLOSING_SOON";
   }
 
-  const [total, opportunities, allDomains] = await Promise.all([
-    prisma.opportunity.count({ where }),
-    prisma.opportunity.findMany({
-      where,
-      orderBy: statusFilter === "CLOSING_SOON" ? [{ deadline: "asc" }] : [{ createdAt: "desc" }],
-      skip,
-      take: limit,
-      include: { source: true },
-    }),
-    prisma.opportunity.findMany({
-      where: { status: "PUBLISHED" },
-      select: { domain: true },
-      distinct: ["domain"],
-    }),
-  ]);
+  let total = 0;
+  let opportunities: any[] = [];
+  let allDomains: { domain: string }[] = [];
+
+  try {
+    const [t, opps, doms] = await Promise.all([
+      prisma.opportunity.count({ where }),
+      prisma.opportunity.findMany({
+        where,
+        orderBy: statusFilter === "CLOSING_SOON" ? [{ deadline: "asc" }] : [{ createdAt: "desc" }],
+        skip,
+        take: limit,
+        include: { source: true },
+      }),
+      prisma.opportunity.findMany({
+        where: { status: "PUBLISHED" },
+        select: { domain: true },
+        distinct: ["domain"],
+      }),
+    ]);
+    total = t;
+    opportunities = opps;
+    allDomains = doms;
+  } catch (error) {
+    console.error("Database query fallback in OpportunitiesPage:", error);
+  }
 
   const domainList = ["All", ...allDomains.map((d) => d.domain).filter(Boolean)];
 
